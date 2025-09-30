@@ -9,7 +9,7 @@ import asyncio
 from pathlib import Path
 
 # 프로젝트 루트를 Python 경로에 추가
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
@@ -32,8 +32,12 @@ def main():
     # 환경 변수 확인
     if not os.getenv("OPENAI_API_KEY"):
         print("⚠️  OpenAI API 키가 설정되지 않았습니다.")
-        print("   config.env.example 파일을 복사하여 .env 파일을 만들고 API 키를 설정하세요.")
-        return
+        print("   데모 모드로 실행합니다. (LLM 기능은 제한됩니다)")
+        print("   전체 기능을 사용하려면:")
+        print("   1. config.env.example을 .env로 복사")
+        print("   2. .env 파일에 OPENAI_API_KEY 추가")
+        print("   3. 다시 실행")
+        print()
     
     print("🚀 KSTAR MCP PoC v2 시작...")
     print("📋 프로젝트 정보:")

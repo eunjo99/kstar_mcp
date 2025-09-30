@@ -48,13 +48,17 @@ class CommandParser:
     """자연어 명령 파서"""
     
     def __init__(self):
-        # OpenAI 클라이언트 초기화
+        # OpenAI 클라이언트 초기화 (데모 모드 지원)
         api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is not set")
-        
-        self._client = OpenAI(api_key=api_key)
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        if api_key:
+            self._client = OpenAI(api_key=api_key)
+            self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            self.demo_mode = False
+        else:
+            self._client = None
+            self.model = None
+            self.demo_mode = True
+            print("⚠️  OpenAI API 키가 없습니다. 데모 모드로 실행됩니다.")
         
         # KSTAR 제어 매핑 테이블
         self.control_mappings = {
@@ -84,6 +88,10 @@ class CommandParser:
     def parse_command(self, command: str) -> ParsedCommand:
         """자연어 명령을 파싱하여 구조화된 제어 명령으로 변환"""
         
+        # 데모 모드에서는 간단한 규칙 기반 파싱 사용
+        if self.demo_mode:
+            return self._demo_parse_command(command)
+        
         # 1단계: 기본 패턴 매칭으로 빠른 파싱 시도
         quick_parse = self._quick_parse(command)
         if quick_parse:
@@ -91,6 +99,61 @@ class CommandParser:
         
         # 2단계: LLM을 사용한 고급 파싱
         return self._llm_parse(command)
+    
+    def _demo_parse_command(self, command: str) -> ParsedCommand:
+        """데모 모드용 간단한 규칙 기반 파싱"""
+        
+        # 온도 관련 키워드와 숫자 추출
+        temp_patterns = [
+            r'(?:temperature|temp|온도).*?(\d+(?:\.\d+)?)\s*(?:keV|kev|도)',
+            r'(\d+(?:\.\d+)?)\s*(?:keV|kev|도)',
+            r'(?:to|올려|낮춰|설정).*?(\d+(?:\.\d+)?)',
+            r'(\d+(?:\.\d+)?)'
+        ]
+        
+        target_temp = None
+        for pattern in temp_patterns:
+            matches = re.findall(pattern, command.lower())
+            if matches:
+                target_temp = float(matches[0])
+                break
+        
+        # 기본값 설정
+        if not target_temp:
+            target_temp = 10.0
+        
+        # 온도에 따른 코일 전류와 가열 파워 계산
+        base_current = 1200
+        base_power = 50
+        temp_diff = target_temp - 8.0  # 기준 온도 8keV
+        
+        coil_current = base_current + (temp_diff * 100)
+        heater_power = base_power + (temp_diff * 5)
+        
+        return ParsedCommand(
+            original_command=command,
+            intent="temperature_control",
+            target_value=target_temp,
+            duration=5.0,
+            control_commands=[
+                ControlCommand(
+                    pv_name="KSTAR:COIL:CURR",
+                    value=coil_current,
+                    unit="A",
+                    description=f"Temperature control via coil current for {target_temp} keV",
+                    priority=1
+                ),
+                ControlCommand(
+                    pv_name="KSTAR:HEATER:POW",
+                    value=heater_power,
+                    unit="%",
+                    description=f"Temperature control via heater power for {target_temp} keV",
+                    priority=1
+                )
+            ],
+            safety_checks=["demo_mode_safety_check"],
+            estimated_time=5.0
+        )
     
     def _quick_parse(self, command: str) -> Optional[ParsedCommand]:
         """기본 정규식 패턴으로 빠른 파싱"""

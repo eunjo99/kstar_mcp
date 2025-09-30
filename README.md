@@ -108,12 +108,42 @@ which softIoc
 
 ## 🚀 Quick Start
 
-### Option 1: Demo Mode (Recommended for Testing)
+### 🎯 **For New Users (Recommended)**
+
+**One-Command Setup:**
+
+**macOS/Linux:**
+```bash
+git clone https://github.com/yourusername/kstar-mcp-poc-v2.git
+cd kstar-mcp-poc-v2
+chmod +x setup.sh
+./setup.sh
+```
+
+**Windows:**
+```cmd
+git clone https://github.com/yourusername/kstar-mcp-poc-v2.git
+cd kstar-mcp-poc-v2
+setup.bat
+```
+
+**Then run:**
+```bash
+# Activate virtual environment
+source venv/bin/activate  # macOS/Linux
+# OR
+venv\Scripts\activate.bat  # Windows
+
+# Start the application
+python main.py
+```
+
+**Open browser:** `http://localhost:8000`
+
+### Option 1: Demo Mode (No API Key Required)
 
 1. **Start the Server**:
    ```bash
-   cd kstar_mcp_poc_v2
-   source ../epics/bin/activate
    python main.py
    ```
 
@@ -124,6 +154,19 @@ which softIoc
    - Enter: `"Raise plasma temperature to 12 keV"`
    - Click "Execute Command"
    - Watch the real-time translation and temperature changes!
+
+### Option 2: Full LLM Mode (Requires OpenAI API Key)
+
+1. **Set up API Key**:
+   ```bash
+   cp config.env.example .env
+   # Edit .env and add your OpenAI API key
+   ```
+
+2. **Start the Server**:
+   ```bash
+   python main.py
+   ```
 
 ### Option 2: With EPICS SoftIOC (Advanced)
 
