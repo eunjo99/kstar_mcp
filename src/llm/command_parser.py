@@ -1,6 +1,21 @@
 #!/usr/bin/env python3
 """
-자연어 명령을 EPICS 제어 명령으로 변환하는 LLM 파서
+Natural Language Command Parser - LLM-based EPICS command translation
+
+This module provides the core functionality for translating natural language
+commands into structured EPICS control commands. It uses OpenAI's language
+models to understand user intent and generate appropriate control sequences.
+
+Key Features:
+- Natural language to EPICS command translation
+- Support for temperature, density, and heating control
+- Safety limit validation
+- Demo mode with rule-based parsing
+- Integration with OpenAI GPT models
+
+This PoC demonstrates a simple approach where target values are set and
+current values gradually follow. Future versions will integrate with
+sophisticated plasma physics models and machine learning algorithms.
 """
 
 import os
@@ -15,7 +30,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-# .env 파일 로드
+# Load .env file
 project_root = Path(__file__).parent.parent.parent
 env_file = project_root / ".env"
 if env_file.exists():
@@ -24,31 +39,36 @@ if env_file.exists():
 
 @dataclass
 class ControlCommand:
-    """EPICS 제어 명령 데이터 클래스"""
+    """EPICS control command data class"""
     pv_name: str
     value: float
     unit: str
     description: str
-    priority: int = 1  # 1=높음, 2=보통, 3=낮음
+    priority: int = 1  # 1=high, 2=medium, 3=low
 
 
 @dataclass
 class ParsedCommand:
-    """파싱된 자연어 명령"""
+    """Parsed natural language command"""
     original_command: str
     intent: str  # "temperature_control", "density_control", "heating_control", etc.
     target_value: Optional[float]
-    duration: Optional[float]  # 초 단위
+    duration: Optional[float]  # seconds
     control_commands: List[ControlCommand]
     safety_checks: List[str]
-    estimated_time: float  # 예상 실행 시간 (초)
+    estimated_time: float  # estimated execution time (seconds)
 
 
 class CommandParser:
-    """자연어 명령 파서"""
+    """Natural language command parser
+    
+    This class handles the translation of natural language commands into
+    structured EPICS control commands. It supports both LLM-based parsing
+    and fallback rule-based parsing for demo mode.
+    """
     
     def __init__(self):
-        # OpenAI 클라이언트 초기화 (데모 모드 지원)
+        # Initialize OpenAI client (with demo mode support)
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key:
             self._client = OpenAI(api_key=api_key)
@@ -58,9 +78,9 @@ class CommandParser:
             self._client = None
             self.model = None
             self.demo_mode = True
-            print("⚠️  OpenAI API 키가 없습니다. 데모 모드로 실행됩니다.")
+            print("⚠️  OpenAI API key not found. Running in demo mode.")
         
-        # KSTAR 제어 매핑 테이블
+        # KSTAR control mapping table
         self.control_mappings = {
             "temperature": {
                 "coil_current": "KSTAR:COIL:CURR",
@@ -82,28 +102,40 @@ class CommandParser:
     
     @property
     def client(self):
-        """OpenAI 클라이언트 반환"""
+        """Return OpenAI client"""
         return self._client
     
     def parse_command(self, command: str) -> ParsedCommand:
-        """자연어 명령을 파싱하여 구조화된 제어 명령으로 변환"""
+        """Parse natural language command into structured control commands
         
-        # 데모 모드에서는 간단한 규칙 기반 파싱 사용
+        Args:
+            command: Natural language command string
+            
+        Returns:
+            ParsedCommand object with control instructions
+        """
+        
+        # Use simple rule-based parsing in demo mode
         if self.demo_mode:
             return self._demo_parse_command(command)
         
-        # 1단계: 기본 패턴 매칭으로 빠른 파싱 시도
+        # Step 1: Try quick pattern matching for fast parsing
         quick_parse = self._quick_parse(command)
         if quick_parse:
             return quick_parse
         
-        # 2단계: LLM을 사용한 고급 파싱
+        # Step 2: Use LLM for advanced parsing
         return self._llm_parse(command)
     
     def _demo_parse_command(self, command: str) -> ParsedCommand:
-        """데모 모드용 간단한 규칙 기반 파싱"""
+        """Demo mode simple rule-based parsing
         
-        # 온도 관련 키워드와 숫자 추출
+        This method provides basic command parsing for demo mode when
+        OpenAI API is not available. It uses regex patterns to extract
+        temperature values and generate control commands.
+        """
+        
+        # Extract temperature-related keywords and numbers
         temp_patterns = [
             r'(?:temperature|temp|온도).*?(\d+(?:\.\d+)?)\s*(?:keV|kev|도)',
             r'(\d+(?:\.\d+)?)\s*(?:keV|kev|도)',
@@ -118,14 +150,14 @@ class CommandParser:
                 target_temp = float(matches[0])
                 break
         
-        # 기본값 설정
+        # Set default value if no temperature found
         if not target_temp:
             target_temp = 10.0
         
-        # 온도에 따른 코일 전류와 가열 파워 계산
+        # Calculate coil current and heater power based on temperature
         base_current = 1200
         base_power = 50
-        temp_diff = target_temp - 8.0  # 기준 온도 8keV
+        temp_diff = target_temp - 8.0  # Reference temperature 8keV
         
         coil_current = base_current + (temp_diff * 100)
         heater_power = base_power + (temp_diff * 5)
@@ -156,9 +188,16 @@ class CommandParser:
         )
     
     def _quick_parse(self, command: str) -> Optional[ParsedCommand]:
-        """기본 정규식 패턴으로 빠른 파싱"""
+        """Quick parsing using basic regex patterns
         
-        # 온도 제어 패턴
+        Args:
+            command: Natural language command string
+            
+        Returns:
+            ParsedCommand if pattern matches, None otherwise
+        """
+        
+        # Temperature control patterns
         temp_patterns = [
             r'온도를?\s*(\d+(?:\.\d+)?)\s*(?:keV|도|도씨)?\s*(?:로|으로)?\s*(?:올려|높여|증가)',
             r'온도를?\s*(\d+(?:\.\d+)?)\s*(?:keV|도|도씨)?\s*(?:로|으로)?\s*(?:내려|낮춰|감소)',
@@ -172,7 +211,7 @@ class CommandParser:
                 target_temp = float(match.group(1))
                 duration = self._extract_duration(command)
                 
-                # 온도 제어 명령 생성
+                # Generate temperature control commands
                 control_commands = self._generate_temperature_commands(target_temp)
                 
                 return ParsedCommand(
@@ -188,34 +227,41 @@ class CommandParser:
         return None
     
     def _llm_parse(self, command: str) -> ParsedCommand:
-        """LLM을 사용한 고급 명령 파싱"""
+        """Advanced command parsing using LLM
+        
+        Args:
+            command: Natural language command string
+            
+        Returns:
+            ParsedCommand object with LLM-generated control instructions
+        """
         
         system_prompt = """
-당신은 KSTAR 플라즈마 제어 시스템의 전문가입니다. 
-자연어 명령을 분석하여 EPICS 제어 명령으로 변환해주세요.
+You are an expert in KSTAR plasma control systems.
+Analyze natural language commands and convert them to EPICS control commands.
 
-사용 가능한 제어 장치:
-- 코일 전류 (COIL:CURR): 0-2000A, 온도 제어에 사용
-- 가열 파워 (HEATER:POW): 0-100%, 온도 제어에 사용  
-- 가스 주입 (GAS:FLOW): 0-1000sccm, 밀도 제어에 사용
-- 자기장 (MAGNET:BT): 0-3.5T, 플라즈마 안정화에 사용
+Available control devices:
+- Coil current (COIL:CURR): 0-2000A, used for temperature control
+- Heater power (HEATER:POW): 0-100%, used for temperature control
+- Gas injection (GAS:FLOW): 0-1000sccm, used for density control
+- Magnetic field (MAGNET:BT): 0-3.5T, used for plasma stabilization
 
-응답 형식:
+Response format:
 {
     "intent": "temperature_control|density_control|heating_control|combined_control",
-    "target_value": 숫자값,
-    "duration": 초단위_시간,
+    "target_value": numeric_value,
+    "duration": time_in_seconds,
     "control_commands": [
         {
-            "pv_name": "PV이름",
-            "value": 숫자값,
-            "unit": "단위",
-            "description": "설명",
+            "pv_name": "PV_name",
+            "value": numeric_value,
+            "unit": "unit",
+            "description": "description",
             "priority": 1
         }
     ],
-    "safety_checks": ["체크항목1", "체크항목2"],
-    "estimated_time": 예상실행시간
+    "safety_checks": ["check1", "check2"],
+    "estimated_time": estimated_execution_time
 }
 """
         
@@ -224,14 +270,14 @@ class CommandParser:
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"다음 명령을 분석해주세요: {command}"}
+                    {"role": "user", "content": f"Please analyze this command: {command}"}
                 ],
                 temperature=0.1
             )
             
             result = json.loads(response.choices[0].message.content)
             
-            # ControlCommand 객체로 변환
+            # Convert to ControlCommand objects
             control_commands = [
                 ControlCommand(
                     pv_name=cmd["pv_name"],
@@ -254,12 +300,19 @@ class CommandParser:
             )
             
         except Exception as e:
-            print(f"LLM 파싱 오류: {e}")
-            # 기본 파싱으로 폴백
+            print(f"LLM parsing error: {e}")
+            # Fallback to basic parsing
             return self._create_fallback_command(command)
     
     def _extract_duration(self, command: str) -> Optional[float]:
-        """명령에서 시간 정보 추출"""
+        """Extract time information from command
+        
+        Args:
+            command: Natural language command string
+            
+        Returns:
+            Duration in seconds or None if not found
+        """
         duration_patterns = [
             r'(\d+)\s*초\s*(?:동안|간)',
             r'(\d+)\s*분\s*(?:동안|간)',
@@ -280,38 +333,45 @@ class CommandParser:
         return None
     
     def _generate_temperature_commands(self, target_temp: float) -> List[ControlCommand]:
-        """온도 제어를 위한 EPICS 명령 생성"""
+        """Generate EPICS commands for temperature control
+        
+        Args:
+            target_temp: Target temperature in keV
+            
+        Returns:
+            List of ControlCommand objects
+        """
         commands = []
         
-        # 현재 온도 가정 (실제로는 EPICS에서 읽어와야 함)
+        # Assume current temperature (should read from EPICS in practice)
         current_temp = 8.0  # keV
         
         if target_temp > current_temp:
-            # 온도 상승: 코일 전류 증가, 가열 파워 증가
+            # Temperature increase: increase coil current and heater power
             temp_diff = target_temp - current_temp
             
-            # 코일 전류 계산 (경험적 공식)
+            # Calculate coil current (empirical formula)
             coil_current = min(1500 + temp_diff * 100, 2000)
             commands.append(ControlCommand(
                 pv_name="KSTAR:COIL:CURR",
                 value=coil_current,
                 unit="A",
-                description=f"온도 {target_temp}keV 달성을 위한 코일 전류 설정",
+                description=f"Temperature control via coil current for {target_temp} keV",
                 priority=1
             ))
             
-            # 가열 파워 계산
+            # Calculate heater power
             heater_power = min(70 + temp_diff * 5, 100)
             commands.append(ControlCommand(
                 pv_name="KSTAR:HEATER:POW",
                 value=heater_power,
                 unit="%",
-                description=f"온도 {target_temp}keV 달성을 위한 가열 파워 설정",
+                description=f"Temperature control via heater power for {target_temp} keV",
                 priority=1
             ))
         
         elif target_temp < current_temp:
-            # 온도 하강: 코일 전류 감소, 가열 파워 감소
+            # Temperature decrease: decrease coil current and heater power
             temp_diff = current_temp - target_temp
             
             coil_current = max(1000 - temp_diff * 50, 500)
@@ -319,7 +379,7 @@ class CommandParser:
                 pv_name="KSTAR:COIL:CURR",
                 value=coil_current,
                 unit="A",
-                description=f"온도 {target_temp}keV 달성을 위한 코일 전류 감소",
+                description=f"Temperature control via coil current reduction for {target_temp} keV",
                 priority=1
             ))
             
@@ -328,14 +388,21 @@ class CommandParser:
                 pv_name="KSTAR:HEATER:POW",
                 value=heater_power,
                 unit="%",
-                description=f"온도 {target_temp}keV 달성을 위한 가열 파워 감소",
+                description=f"Temperature control via heater power reduction for {target_temp} keV",
                 priority=1
             ))
         
         return commands
     
     def _create_fallback_command(self, command: str) -> ParsedCommand:
-        """파싱 실패 시 기본 명령 생성"""
+        """Create fallback command when parsing fails
+        
+        Args:
+            command: Original command string
+            
+        Returns:
+            Basic ParsedCommand object
+        """
         return ParsedCommand(
             original_command=command,
             intent="unknown",
@@ -347,25 +414,25 @@ class CommandParser:
         )
 
 
-# 테스트 함수
+# Test function
 def test_command_parser():
-    """명령 파서 테스트"""
+    """Test command parser functionality"""
     parser = CommandParser()
     
     test_commands = [
-        "플라즈마 온도를 10도 올려줘 5초 동안",
-        "온도를 12 keV로 설정해줘",
-        "밀도를 3e19로 조절해줘",
-        "가열 파워를 80%로 올려줘"
+        "Raise plasma temperature to 10 keV for 5 seconds",
+        "Set temperature to 12 keV",
+        "Adjust density to 3e19",
+        "Increase heater power to 80%"
     ]
     
     for cmd in test_commands:
-        print(f"\n명령: {cmd}")
+        print(f"\nCommand: {cmd}")
         result = parser.parse_command(cmd)
-        print(f"의도: {result.intent}")
-        print(f"목표값: {result.target_value}")
-        print(f"지속시간: {result.duration}초")
-        print(f"제어명령 수: {len(result.control_commands)}")
+        print(f"Intent: {result.intent}")
+        print(f"Target value: {result.target_value}")
+        print(f"Duration: {result.duration} seconds")
+        print(f"Control commands: {len(result.control_commands)}")
         for cmd_obj in result.control_commands:
             print(f"  - {cmd_obj.pv_name} = {cmd_obj.value} {cmd_obj.unit}")
 

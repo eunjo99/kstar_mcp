@@ -1,6 +1,22 @@
 #!/usr/bin/env python3
 """
-명령 실행 엔진 - 자연어 명령을 받아서 전체 제어 과정을 관리
+Command Execution Engine - Orchestrates natural language command execution
+
+This module provides the main execution engine that coordinates the entire
+process of executing natural language commands. It manages the workflow
+from command parsing to EPICS execution and monitoring.
+
+Key Features:
+- Command parsing and validation
+- Safety checks and limit validation
+- EPICS command execution
+- Real-time monitoring and feedback
+- Progress tracking and status updates
+- Error handling and recovery
+
+This PoC demonstrates a simple approach where target values are set and
+current values gradually follow. Future versions will integrate with
+sophisticated plasma physics models and machine learning algorithms.
 """
 
 import asyncio
@@ -16,7 +32,7 @@ from ..epics.controller import EPICSController, ControlResult, PVStatus
 
 
 class ExecutionStatus(Enum):
-    """실행 상태"""
+    """Command execution status"""
     PENDING = "pending"
     PARSING = "parsing"
     EXECUTING = "executing"
@@ -28,7 +44,7 @@ class ExecutionStatus(Enum):
 
 @dataclass
 class ExecutionStep:
-    """실행 단계"""
+    """Command execution step"""
     step_id: str
     name: str
     status: ExecutionStatus
@@ -41,7 +57,7 @@ class ExecutionStep:
 
 @dataclass
 class CommandExecution:
-    """명령 실행 세션"""
+    """Command execution session"""
     execution_id: str
     original_command: str
     parsed_command: Optional[ParsedCommand] = None
@@ -54,16 +70,21 @@ class CommandExecution:
     current_step: Optional[str] = None
     error_message: Optional[str] = None
     
-    # 실시간 모니터링 데이터
+    # Real-time monitoring data
     monitoring_data: Dict[str, List[Dict]] = field(default_factory=dict)
     
-    # 콜백 함수들
+    # Callback functions
     progress_callbacks: List[Callable] = field(default_factory=list)
     status_callbacks: List[Callable] = field(default_factory=list)
 
 
 class CommandExecutionEngine:
-    """명령 실행 엔진"""
+    """Command execution engine
+    
+    This class orchestrates the entire process of executing natural language
+    commands, from parsing to EPICS execution and monitoring. It provides
+    comprehensive workflow management with safety checks and progress tracking.
+    """
     
     def __init__(self):
         self.parser = CommandParser()
@@ -74,7 +95,15 @@ class CommandExecutionEngine:
         self.logger = logging.getLogger(__name__)
     
     async def execute_command(self, command: str, execution_id: Optional[str] = None) -> CommandExecution:
-        """자연어 명령 실행"""
+        """Execute natural language command
+        
+        Args:
+            command: Natural language command string
+            execution_id: Optional execution ID
+            
+        Returns:
+            CommandExecution object with execution details
+        """
         
         if not execution_id:
             execution_id = f"cmd_{int(time.time())}"
@@ -92,7 +121,7 @@ class CommandExecutionEngine:
         except Exception as e:
             execution.status = ExecutionStatus.FAILED
             execution.error_message = str(e)
-            self.logger.error(f"명령 실행 실패: {e}")
+            self.logger.error(f"Command execution failed: {e}")
         finally:
             execution.end_time = datetime.now()
             if execution.start_time:
@@ -101,13 +130,17 @@ class CommandExecutionEngine:
         return execution
     
     async def _execute_command_internal(self, execution: CommandExecution):
-        """내부 명령 실행 로직"""
+        """Internal command execution logic
+        
+        Args:
+            execution: CommandExecution object to process
+        """
         
         execution.start_time = datetime.now()
         execution.status = ExecutionStatus.PARSING
         
-        # 1단계: 명령 파싱
-        await self._add_step(execution, "parsing", "자연어 명령 파싱")
+        # Step 1: Command parsing
+        await self._add_step(execution, "parsing", "Natural language command parsing")
         try:
             execution.parsed_command = self.parser.parse_command(execution.original_command)
             await self._complete_step(execution, "parsing", execution.parsed_command)
@@ -116,8 +149,8 @@ class CommandExecutionEngine:
             await self._fail_step(execution, "parsing", str(e))
             raise
         
-        # 2단계: 안전 검사
-        await self._add_step(execution, "safety_check", "안전 검사")
+        # Step 2: Safety checks
+        await self._add_step(execution, "safety_check", "Safety validation")
         try:
             safety_result = await self._perform_safety_checks(execution.parsed_command)
             await self._complete_step(execution, "safety_check", safety_result)
@@ -126,9 +159,9 @@ class CommandExecutionEngine:
             await self._fail_step(execution, "safety_check", str(e))
             raise
         
-        # 3단계: 제어 명령 실행
+        # Step 3: Control command execution
         execution.status = ExecutionStatus.EXECUTING
-        await self._add_step(execution, "execution", "EPICS 제어 명령 실행")
+        await self._add_step(execution, "execution", "EPICS control command execution")
         try:
             execution.results = await self.controller.execute_parsed_command(execution.parsed_command)
             await self._complete_step(execution, "execution", execution.results)
@@ -137,25 +170,32 @@ class CommandExecutionEngine:
             await self._fail_step(execution, "execution", str(e))
             raise
         
-        # 4단계: 결과 모니터링
+        # Step 4: Result monitoring
         execution.status = ExecutionStatus.MONITORING
-        await self._add_step(execution, "monitoring", "결과 모니터링")
+        await self._add_step(execution, "monitoring", "Result monitoring")
         try:
             monitoring_result = await self._monitor_results(execution)
             await self._complete_step(execution, "monitoring", monitoring_result)
             execution.progress = 90.0
         except Exception as e:
             await self._fail_step(execution, "monitoring", str(e))
-            # 모니터링 실패는 치명적이지 않음
+            # Monitoring failure is not critical
+            pass
         
-        # 5단계: 완료
+        # Step 5: Completion
         execution.status = ExecutionStatus.COMPLETED
         execution.progress = 100.0
         
-        self.logger.info(f"명령 실행 완료: {execution.execution_id}")
+        self.logger.info(f"Command execution completed: {execution.execution_id}")
     
     async def _add_step(self, execution: CommandExecution, step_id: str, name: str):
-        """실행 단계 추가"""
+        """Add execution step
+        
+        Args:
+            execution: CommandExecution object
+            step_id: Unique step identifier
+            name: Human-readable step name
+        """
         step = ExecutionStep(
             step_id=step_id,
             name=name,
@@ -165,11 +205,17 @@ class CommandExecutionEngine:
         execution.steps.append(step)
         execution.current_step = step_id
         
-        self.logger.info(f"단계 시작: {name}")
+        self.logger.info(f"Step started: {name}")
         await self._notify_status_change(execution)
     
     async def _complete_step(self, execution: CommandExecution, step_id: str, result: Any):
-        """실행 단계 완료"""
+        """Complete execution step
+        
+        Args:
+            execution: CommandExecution object
+            step_id: Step identifier
+            result: Step execution result
+        """
         for step in execution.steps:
             if step.step_id == step_id:
                 step.status = ExecutionStatus.COMPLETED
@@ -179,11 +225,17 @@ class CommandExecutionEngine:
                     step.duration = (step.end_time - step.start_time).total_seconds()
                 break
         
-        self.logger.info(f"단계 완료: {step_id}")
+        self.logger.info(f"Step completed: {step_id}")
         await self._notify_status_change(execution)
     
     async def _fail_step(self, execution: CommandExecution, step_id: str, error_message: str):
-        """실행 단계 실패"""
+        """Fail execution step
+        
+        Args:
+            execution: CommandExecution object
+            step_id: Step identifier
+            error_message: Error description
+        """
         for step in execution.steps:
             if step.step_id == step_id:
                 step.status = ExecutionStatus.FAILED
@@ -193,11 +245,18 @@ class CommandExecutionEngine:
                     step.duration = (step.end_time - step.start_time).total_seconds()
                 break
         
-        self.logger.error(f"단계 실패: {step_id} - {error_message}")
+        self.logger.error(f"Step failed: {step_id} - {error_message}")
         await self._notify_status_change(execution)
     
     async def _perform_safety_checks(self, parsed_command: ParsedCommand) -> Dict[str, Any]:
-        """안전 검사 수행"""
+        """Perform safety checks on parsed command
+        
+        Args:
+            parsed_command: ParsedCommand object to validate
+            
+        Returns:
+            Dictionary with safety check results
+        """
         safety_result = {
             "passed": True,
             "checks": [],
@@ -205,7 +264,7 @@ class CommandExecutionEngine:
         }
         
         for command in parsed_command.control_commands:
-            # 안전 제한 검사
+            # Safety limit check
             if not self.controller._check_safety_limits(command.pv_name, command.value):
                 safety_result["passed"] = False
                 safety_result["checks"].append({
@@ -222,14 +281,21 @@ class CommandExecutionEngine:
                     "status": "PASSED"
                 })
         
-        # 추가 안전 검사들
+        # Additional safety checks
         if parsed_command.duration and parsed_command.duration > 60:
-            safety_result["warnings"].append("장시간 제어 실행 - 주의 필요")
+            safety_result["warnings"].append("Long-term control execution - caution required")
         
         return safety_result
     
     async def _monitor_results(self, execution: CommandExecution) -> Dict[str, Any]:
-        """결과 모니터링"""
+        """Monitor command execution results
+        
+        Args:
+            execution: CommandExecution object
+            
+        Returns:
+            Dictionary with monitoring results
+        """
         monitoring_result = {
             "monitoring_time": 10.0,  # 10초간 모니터링
             "data_points": [],
@@ -239,15 +305,15 @@ class CommandExecutionEngine:
         if not execution.results:
             return monitoring_result
         
-        # 모니터링할 PV 목록 (온도 관련 PV들)
+        # Monitor PVs (temperature-related PVs)
         monitor_pvs = [
-            "KSTAR:PCS:TE:SP",   # 온도 설정값
-            "KSTAR:PCS:TE:RBV",  # 온도 측정값
-            "KSTAR:COIL:CURR",   # 코일 전류
-            "KSTAR:HEATER:POW"   # 가열 파워
+            "KSTAR:PCS:TE:SP",   # Temperature setpoint
+            "KSTAR:PCS:TE:RBV",  # Temperature readback value
+            "KSTAR:COIL:CURR",   # Coil current
+            "KSTAR:HEATER:POW"   # Heater power
         ]
         
-        # 모니터링 데이터 수집
+        # Collect monitoring data
         start_time = time.time()
         data_points = []
         
@@ -262,62 +328,96 @@ class CommandExecutionEngine:
                 point["values"][pv_name] = value
             
             data_points.append(point)
-            execution.monitoring_data["realtime"] = data_points[-20:]  # 최근 20개만 유지
+            execution.monitoring_data["realtime"] = data_points[-20:]  # Keep recent 20 points
             
-            # WebSocket으로 실시간 데이터 브로드캐스트
+            # Broadcast real-time data via WebSocket
             await self._broadcast_monitoring_data(execution)
             
-            await asyncio.sleep(0.2)  # 0.2초마다 샘플링
+            await asyncio.sleep(0.2)  # Sample every 0.2 seconds
         
         monitoring_result["data_points"] = data_points
         
-        # 성공률 계산
+        # Calculate success rate
         successful_commands = sum(1 for r in execution.results if r.success)
         monitoring_result["success_rate"] = successful_commands / len(execution.results)
         
         return monitoring_result
     
     async def _broadcast_monitoring_data(self, execution: CommandExecution):
-        """모니터링 데이터를 WebSocket으로 브로드캐스트"""
-        # 이 메서드는 UI에서 WebSocket 연결을 통해 호출됩니다
+        """Broadcast monitoring data via WebSocket
+        
+        Args:
+            execution: CommandExecution object
+        """
+        # This method is called from UI via WebSocket connection
         pass
     
     async def _notify_status_change(self, execution: CommandExecution):
-        """상태 변경 알림"""
+        """Notify status change to callbacks
+        
+        Args:
+            execution: CommandExecution object
+        """
         for callback in execution.status_callbacks:
             try:
                 await callback(execution)
             except Exception as e:
-                self.logger.error(f"상태 콜백 오류: {e}")
+                self.logger.error(f"Status callback error: {e}")
     
     async def _notify_progress_change(self, execution: CommandExecution):
-        """진행률 변경 알림"""
+        """Notify progress change to callbacks
+        
+        Args:
+            execution: CommandExecution object
+        """
         for callback in execution.progress_callbacks:
             try:
                 await callback(execution)
             except Exception as e:
-                self.logger.error(f"진행률 콜백 오류: {e}")
+                self.logger.error(f"Progress callback error: {e}")
     
     def get_execution_status(self, execution_id: str) -> Optional[CommandExecution]:
-        """실행 상태 조회"""
+        """Get execution status
+        
+        Args:
+            execution_id: Execution identifier
+            
+        Returns:
+            CommandExecution object or None
+        """
         return self.active_executions.get(execution_id)
     
     def cancel_execution(self, execution_id: str) -> bool:
-        """실행 취소"""
+        """Cancel execution
+        
+        Args:
+            execution_id: Execution identifier
+            
+        Returns:
+            True if cancelled successfully
+        """
         if execution_id in self.active_executions:
             execution = self.active_executions[execution_id]
             execution.status = ExecutionStatus.CANCELLED
             execution.end_time = datetime.now()
-            self.logger.info(f"실행 취소: {execution_id}")
+            self.logger.info(f"Execution cancelled: {execution_id}")
             return True
         return False
     
     def get_active_executions(self) -> List[CommandExecution]:
-        """활성 실행 목록 조회"""
+        """Get active executions
+        
+        Returns:
+            List of active CommandExecution objects
+        """
         return list(self.active_executions.values())
     
     def cleanup_completed_executions(self):
-        """완료된 실행 정리"""
+        """Clean up completed executions
+        
+        Removes completed, failed, or cancelled executions from memory
+        to prevent memory leaks in long-running applications.
+        """
         completed_ids = []
         for execution_id, execution in self.active_executions.items():
             if execution.status in [ExecutionStatus.COMPLETED, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED]:
@@ -327,24 +427,24 @@ class CommandExecutionEngine:
             del self.active_executions[execution_id]
         
         if completed_ids:
-            self.logger.info(f"완료된 실행 정리: {len(completed_ids)}개")
+            self.logger.info(f"Completed executions cleaned up: {len(completed_ids)}")
 
 
-# 테스트 함수
+# Test function
 async def test_execution_engine():
-    """실행 엔진 테스트"""
+    """Test execution engine functionality"""
     engine = CommandExecutionEngine()
     
-    test_command = "플라즈마 온도를 10 keV로 올려줘"
+    test_command = "Raise plasma temperature to 10 keV"
     
-    print(f"테스트 명령: {test_command}")
+    print(f"Test command: {test_command}")
     
     execution = await engine.execute_command(test_command)
     
-    print(f"실행 ID: {execution.execution_id}")
-    print(f"상태: {execution.status}")
-    print(f"진행률: {execution.progress}%")
-    print(f"단계 수: {len(execution.steps)}")
+    print(f"Execution ID: {execution.execution_id}")
+    print(f"Status: {execution.status}")
+    print(f"Progress: {execution.progress}%")
+    print(f"Steps: {len(execution.steps)}")
     
     for step in execution.steps:
         print(f"  - {step.name}: {step.status}")

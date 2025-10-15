@@ -1,74 +1,76 @@
 @echo off
-REM KSTAR MCP PoC v2 - Windows 자동 설치 스크립트
+REM KSTAR MCP PoC v2 - Windows Automated Installation Script
 
-echo 🚀 KSTAR MCP PoC v2 설치를 시작합니다...
+echo 🚀 Starting KSTAR MCP PoC v2 installation...
 echo ================================================
 
-REM 현재 디렉토리로 이동
+REM Change to script directory
 cd /d "%~dp0"
 
-echo 📁 작업 디렉토리: %CD%
+echo 📁 Working directory: %CD%
 
-REM Python 확인
-echo 🐍 Python 버전 확인...
+REM Check Python
+echo 🐍 Checking Python version...
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Python이 설치되지 않았습니다.
-    echo    Python 3.8 이상을 설치해주세요.
+    echo ❌ Python is not installed.
+    echo    Please install Python 3.8 or higher.
     echo    https://www.python.org/downloads/
     pause
     exit /b 1
 )
 
-echo ✅ Python 발견
+echo ✅ Python found
 
-REM 가상환경 생성
-echo 🔧 가상환경 생성...
+REM Create virtual environment
+echo 🔧 Creating virtual environment...
 if not exist "venv" (
     python -m venv venv
-    echo ✅ 가상환경 생성 완료
+    echo ✅ Virtual environment created
 ) else (
-    echo ⚠️  가상환경이 이미 존재합니다.
+    echo ⚠️  Virtual environment already exists.
 )
 
-REM 가상환경 활성화
-echo 🔌 가상환경 활성화...
+REM Activate virtual environment
+echo 🔌 Activating virtual environment...
 call venv\Scripts\activate.bat
 
-REM pip 업그레이드
-echo 📦 pip 업그레이드...
+REM Upgrade pip
+echo 📦 Upgrading pip...
 python -m pip install --upgrade pip
 
-REM 의존성 설치
-echo 📚 Python 패키지 설치...
+REM Install dependencies
+echo 📚 Installing Python packages...
 pip install -r requirements.txt
 
-REM 환경 설정 파일 생성
-echo ⚙️  환경 설정 파일 생성...
+REM Create environment configuration file
+echo ⚙️  Creating environment configuration file...
 if not exist ".env" (
     copy config.env.example .env
-    echo ✅ .env 파일 생성 완료
-    echo ⚠️  .env 파일에 OpenAI API 키를 추가해주세요!
+    echo ✅ .env file created
+    echo ⚠️  Please add your OpenAI API key to .env file!
 ) else (
-    echo ⚠️  .env 파일이 이미 존재합니다.
+    echo ⚠️  .env file already exists.
 )
 
 echo.
 echo ================================================
-echo 🎉 설치가 완료되었습니다!
+echo 🎉 Installation completed!
 echo.
-echo 📋 다음 단계:
-echo 1. OpenAI API 키 설정 (선택사항):
+echo 📋 Next steps:
+echo 1. Set up OpenAI API key (optional):
 echo    notepad .env
 echo    # OPENAI_API_KEY=your_api_key_here
 echo.
-echo 2. 애플리케이션 실행:
+echo 2. Run the application:
 echo    venv\Scripts\activate.bat
 echo    python main.py
 echo.
-echo 3. 웹 브라우저에서 접속:
+echo 3. Open web browser:
 echo    http://localhost:8000
 echo.
-echo 💡 팁: API 키 없이도 데모 모드로 실행됩니다!
+echo 💡 Tip: Demo mode works without API key!
 echo ================================================
 pause
+
+

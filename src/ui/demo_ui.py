@@ -1,6 +1,20 @@
 #!/usr/bin/env python3
 """
-EPICS 연결 없이도 작동하는 데모 모드 UI
+Demo Mode UI - Web-based interface for KSTAR MCP PoC v2
+
+This module provides a complete web-based user interface that works without EPICS connection.
+It simulates the natural language to EPICS command translation process and provides
+real-time monitoring of plasma parameters.
+
+Key Features:
+- Real-time WebSocket communication
+- Interactive command input and execution
+- Live temperature and parameter monitoring
+- Command translation visualization
+- Demo mode with realistic simulation
+
+This is designed as a PoC to demonstrate the concept of natural language control
+of plasma parameters, with plans for future integration with sophisticated models.
 """
 
 import asyncio
@@ -19,7 +33,7 @@ from ..epics.controller import EPICSController
 
 
 class ConnectionManager:
-    """WebSocket 연결 관리"""
+    """WebSocket connection manager for real-time communication"""
     
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -42,7 +56,12 @@ class ConnectionManager:
 
 
 class DemoModeUI:
-    """데모 모드 UI - EPICS 연결 없이도 작동"""
+    """Demo Mode UI - Complete web interface without EPICS dependency
+    
+    This class provides a full-featured web UI that simulates the KSTAR control system
+    without requiring actual EPICS hardware. It demonstrates the natural language
+    to EPICS command translation process and provides realistic parameter monitoring.
+    """
     
     def __init__(self):
         self.app = FastAPI(title="KSTAR MCP PoC v2 - Demo Mode")
@@ -56,15 +75,15 @@ class DemoModeUI:
         self.connection_manager = ConnectionManager()
         self.execution_engine = CommandExecutionEngine()
         
-        # 데모용 가상 PV 값들
+        # Demo mode virtual PV values (simulated KSTAR parameters)
         self.demo_values = {
-            "KSTAR:PCS:TE:SP": 8.0,    # 온도 설정값
-            "KSTAR:PCS:TE:RBV": 8.0,   # 온도 측정값
-            "KSTAR:COIL:CURR": 1200.0, # 코일 전류
-            "KSTAR:HEATER:POW": 50.0   # 가열 파워
+            "KSTAR:PCS:TE:SP": 8.0,    # Temperature setpoint (keV)
+            "KSTAR:PCS:TE:RBV": 8.0,   # Temperature readback value (keV)
+            "KSTAR:COIL:CURR": 1200.0, # Coil current (A)
+            "KSTAR:HEATER:POW": 50.0   # Heater power (%)
         }
         
-        # 지속적인 모니터링 데이터
+        # Continuous monitoring data for real-time updates
         self.continuous_monitoring = {
             "temperature_history": [],
             "command_history": [],
@@ -75,7 +94,7 @@ class DemoModeUI:
         self._setup_websocket_handlers()
     
     def _setup_routes(self):
-        """라우트 설정"""
+        """Setup FastAPI routes for web interface"""
         
         @self.app.get("/", response_class=HTMLResponse)
         async def get_ui():
@@ -87,10 +106,10 @@ class DemoModeUI:
             if not command:
                 raise HTTPException(status_code=400, detail="Command is required")
             
-            # 데모 모드에서는 실제 EPICS 대신 가상 시뮬레이션 실행
+            # Execute command simulation instead of real EPICS commands
             execution = await self._simulate_command_execution(command)
             
-            # 명령 히스토리에 추가
+            # Add command to history for tracking
             command_record = {
                 "timestamp": datetime.now().isoformat(),
                 "original_command": command,
@@ -100,7 +119,7 @@ class DemoModeUI:
             
             self.continuous_monitoring["command_history"].append(command_record)
             
-            # WebSocket으로 브로드캐스트
+            # Broadcast command execution via WebSocket
             await self.connection_manager.broadcast(json.dumps({
                 "type": "command_executed",
                 "command_record": command_record
@@ -132,7 +151,7 @@ class DemoModeUI:
             }
     
     def _setup_websocket_handlers(self):
-        """WebSocket 핸들러 설정"""
+        """Setup WebSocket handlers for real-time communication"""
         
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
@@ -140,10 +159,10 @@ class DemoModeUI:
             
             try:
                 while True:
-                    # 지속적인 온도 모니터링 (데모 모드)
+                    # Continuous temperature monitoring (demo mode)
                     await self._update_demo_monitoring()
                     
-                    # WebSocket으로 실시간 데이터 전송
+                    # Send real-time data via WebSocket
                     await self.connection_manager.broadcast(json.dumps({
                         "type": "continuous_update",
                         "temperature_data": self.continuous_monitoring["temperature_history"][-50:],
@@ -151,25 +170,29 @@ class DemoModeUI:
                         "timestamp": datetime.now().isoformat()
                     }))
                     
-                    await asyncio.sleep(0.5)  # 0.5초마다 업데이트
+                    await asyncio.sleep(0.5)  # Update every 0.5 seconds
                     
             except WebSocketDisconnect:
                 self.connection_manager.disconnect(websocket)
     
     async def _update_demo_monitoring(self):
-        """데모 모드 모니터링 데이터 업데이트 - 자연스러운 온도 변화"""
+        """Update demo monitoring data with realistic temperature changes
+        
+        This simulates how plasma temperature gradually approaches target values,
+        providing a realistic demonstration of the control system behavior.
+        """
         try:
-            # 실제 온도가 목표 온도를 천천히 따라가도록 시뮬레이션
+            # Simulate gradual temperature approach to target
             target_temp = self.demo_values["KSTAR:PCS:TE:SP"]
             current_temp = self.demo_values["KSTAR:PCS:TE:RBV"]
             
-            # 온도 차이가 있으면 천천히 따라가기
+            # Gradually approach target temperature if difference exists
             if abs(target_temp - current_temp) > 0.01:
                 diff = target_temp - current_temp
-                # 0.5초마다 차이의 5%씩 따라가기 (자연스러운 변화)
+                # Move 5% of difference every 0.5 seconds (realistic behavior)
                 self.demo_values["KSTAR:PCS:TE:RBV"] += diff * 0.05
             
-            # 온도 히스토리에 추가
+            # Add temperature record to history
             temp_record = {
                 "timestamp": datetime.now().isoformat(),
                 "sp": self.demo_values["KSTAR:PCS:TE:SP"],
@@ -180,22 +203,26 @@ class DemoModeUI:
             
             self.continuous_monitoring["temperature_history"].append(temp_record)
             
-            # 최대 200개 데이터 포인트 유지
+            # Keep maximum 200 data points for performance
             if len(self.continuous_monitoring["temperature_history"]) > 200:
                 self.continuous_monitoring["temperature_history"] = self.continuous_monitoring["temperature_history"][-200:]
             
             self.continuous_monitoring["last_update"] = datetime.now().isoformat()
             
         except Exception as e:
-            print(f"데모 모니터링 업데이트 오류: {e}")
+            print(f"Demo monitoring update error: {e}")
     
     async def _simulate_command_execution(self, command: str) -> Dict[str, Any]:
-        """명령 실행 시뮬레이션 - 개선된 파싱"""
+        """Simulate command execution with improved parsing
         
-        # 명령에서 숫자 추출 (더 정확한 파싱)
+        This method parses natural language commands and simulates the execution
+        of EPICS control commands, providing realistic feedback for the demo.
+        """
+        
+        # Extract numbers from command (improved parsing)
         import re
         
-        # 온도 관련 키워드와 숫자 추출
+        # Temperature-related keywords and number extraction
         temp_patterns = [
             r'(?:temperature|temp|온도).*?(\d+(?:\.\d+)?)\s*(?:keV|kev|도)',
             r'(\d+(?:\.\d+)?)\s*(?:keV|kev|도)',
@@ -210,14 +237,14 @@ class DemoModeUI:
                 target_temp = float(matches[0])
                 break
         
-        # 기본값 설정
+        # Set default value if no temperature found
         if not target_temp:
             target_temp = 10.0
         
-        # 온도에 따른 제어 명령 생성
+        # Generate control commands based on temperature
         base_current = 1200
         base_power = 50
-        temp_diff = target_temp - 8.0  # 기준 온도 8keV
+        temp_diff = target_temp - 8.0  # Reference temperature 8keV
         
         coil_current = base_current + (temp_diff * 100)
         heater_power = base_power + (temp_diff * 5)
@@ -242,29 +269,29 @@ class DemoModeUI:
             ]
         }
         
-        # 실행 결과 시뮬레이션 (이전값을 미리 저장)
+        # Simulate execution results (store previous values)
         results = []
         
-        # 명령 실행 전 이전값들을 미리 저장 (온도 계산 전에!)
+        # Store previous values before command execution
         old_values = {
             "KSTAR:COIL:CURR": self.demo_values.get("KSTAR:COIL:CURR", 0),
             "KSTAR:HEATER:POW": self.demo_values.get("KSTAR:HEATER:POW", 0)
         }
         
-        # 목표 온도만 즉시 설정 (실제 온도는 WebSocket에서 천천히 따라감)
+        # Set target temperature immediately (actual temperature follows gradually via WebSocket)
         target_temp = parsed_command["target_value"]
         if target_temp:
             self.demo_values["KSTAR:PCS:TE:SP"] = target_temp
             
-            # 온도에 따른 코일 전류와 가열 파워 계산
+            # Calculate coil current and heater power based on temperature
             base_current = 1200
             base_power = 50
-            temp_diff = target_temp - 8.0  # 기준 온도 8keV
+            temp_diff = target_temp - 8.0  # Reference temperature 8keV
             
             self.demo_values["KSTAR:COIL:CURR"] = base_current + (temp_diff * 100)
             self.demo_values["KSTAR:HEATER:POW"] = base_power + (temp_diff * 5)
         
-        # 각 명령 실행 및 결과 기록
+        # Execute each command and record results
         for cmd in parsed_command["control_commands"]:
             old_value = old_values[cmd["pv_name"]]
             new_value = cmd["value"]
@@ -279,14 +306,14 @@ class DemoModeUI:
                 "execution_time": 0.1
             })
         
-        # 목표 온도는 즉시 설정, 실제 온도는 천천히 따라가도록 시뮬레이션
+        # Target temperature is set immediately, actual temperature follows gradually
         target_temp = parsed_command["target_value"]
         if target_temp:
-            # 목표 온도는 즉시 설정
+            # Set target temperature immediately
             self.demo_values["KSTAR:PCS:TE:SP"] = target_temp
             
-            # 실제 온도는 천천히 따라가도록 시뮬레이션 (나중에 WebSocket에서 처리)
-            # 여기서는 즉시 변경하지 않음
+            # Actual temperature follows gradually (handled by WebSocket)
+            # Don't change immediately here
         
         return {
             "parsed_command": parsed_command,
@@ -294,7 +321,11 @@ class DemoModeUI:
         }
     
     def _get_demo_html_ui(self) -> str:
-        """데모 HTML UI 반환"""
+        """Return demo HTML UI with complete web interface
+        
+        This method returns a complete HTML page with embedded CSS and JavaScript
+        that provides a modern, responsive interface for the KSTAR control system.
+        """
         return """
 <!DOCTYPE html>
 <html lang="ko">
@@ -1060,18 +1091,23 @@ class DemoModeUI:
         """
     
     def run(self, host: str = "0.0.0.0", port: int = 8000):
-        """서버 실행"""
-        print(f"🚀 KSTAR MCP PoC v2 데모 모드 서버 시작...")
-        print(f"🌐 웹 UI: http://{host}:{port}")
+        """Start the demo mode server
+        
+        Args:
+            host: Server host address
+            port: Server port number
+        """
+        print(f"🚀 KSTAR MCP PoC v2 Demo Mode Server Starting...")
+        print(f"🌐 Web UI: http://{host}:{port}")
         print(f"📡 WebSocket: ws://{host}:{port}/ws")
-        print(f"🎬 데모 모드: EPICS 연결 없이 시뮬레이션 실행")
+        print(f"🎬 Demo Mode: Simulation without EPICS connection")
         
         uvicorn.run(self.app, host=host, port=port, log_level="info")
 
 
-# 메인 실행 함수
+# Main execution function
 def main():
-    """메인 실행 함수"""
+    """Main execution function for standalone operation"""
     ui = DemoModeUI()
     ui.run()
 

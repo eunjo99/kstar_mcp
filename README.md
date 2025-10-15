@@ -1,10 +1,12 @@
-# KSTAR MCP PoC v2 - Interactive Real-time Control System
+# KSTAR MCP PoC v2 - Natural Language Plasma Control System
 
-🚀 **Natural Language to EPICS Command Translation with Real-time Monitoring**
+🚀 **Interactive Real-time Control System with Natural Language Command Translation**
 
 A proof-of-concept system that enables researchers to control KSTAR plasma parameters using natural language commands, with real-time visualization of the command translation process and temperature changes.
 
-## 🌟 Features
+**Note**: This is a PoC demonstrating a simple approach where target values are set and current values gradually follow the targets. This approach is designed for demonstration purposes and future versions will integrate with sophisticated simulation models and machine learning algorithms for more realistic plasma physics behavior.
+
+## 🌟 Key Features
 
 - **Natural Language Interface**: Control plasma temperature using simple English commands
 - **Real-time Command Translation**: Visualize how LLM converts natural language to EPICS SET commands
@@ -26,22 +28,21 @@ Try these natural language commands:
 ## 📋 Prerequisites
 
 ### System Requirements
-- macOS (tested on macOS 14.6.0)
+- macOS/Linux/Windows
 - Python 3.13+
-- EPICS Base 7.0.9
+- EPICS Base 7.0.9 with SoftIOC
 
 ### Required Software
 - EPICS Base with SoftIOC
 - Python virtual environment
-- OpenAI API key
+- OpenAI API key (optional - demo mode works without it)
 
 ## 🛠️ Installation Guide
 
-### Step 1: Install EPICS Base
+### Step 1: Install EPICS Base and SoftIOC
 
 1. **Download EPICS Base 7.0.9**:
    ```bash
-   cd ~/Desktop/EnF/epics_mcp
    wget https://epics.anl.gov/download/base/base-7.0.9.tar.gz
    tar -xzf base-7.0.9.tar.gz
    ```
@@ -54,95 +55,46 @@ Try these natural language commands:
 
 3. **Set Environment Variables**:
    ```bash
-   export EPICS_BASE=/Users/eunjo/Desktop/EnF/epics_mcp/base-7.0.9
-   export PATH=$EPICS_BASE/bin/darwin-aarch64:$PATH
+   export EPICS_BASE=/path/to/epics/base-7.0.9
+   export PATH=$EPICS_BASE/bin/darwin-aarch64:$PATH  # Adjust for your platform
    ```
 
-### Step 2: Install SoftIOC
-
-SoftIOC is included with EPICS Base. Verify installation:
-```bash
-which softIoc
-# Should output: /path/to/epics/base/bin/darwin-aarch64/softIoc
-```
-
-### Step 3: Set Up Python Environment
-
-1. **Create Virtual Environment**:
+4. **Verify SoftIOC Installation**:
    ```bash
-   cd ~/Desktop/EnF/epics_mcp
-   python3 -m venv epics
-   source epics/bin/activate
+   which softIoc
+   # Should output: /path/to/epics/base/bin/darwin-aarch64/softIoc
    ```
 
-2. **Install Dependencies**:
+### Step 2: Clone and Setup Project
+
+1. **Clone the Repository**:
    ```bash
-   cd kstar_mcp_poc_v2
+   git clone https://github.com/yourusername/kstar-mcp-poc-v2.git
+   cd kstar-mcp-poc-v2
+   ```
+
+2. **Create Virtual Environment**:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install Dependencies**:
+   ```bash
    pip install -r requirements.txt
    ```
 
-### Step 4: Configure Environment
-
-1. **Create Environment File**:
+4. **Configure Environment**:
    ```bash
    cp config.env.example .env
-   ```
-
-2. **Edit .env file**:
-   ```bash
-   # Add your OpenAI API key
-   OPENAI_API_KEY=your_openai_api_key_here
-   OPENAI_MODEL=gpt-4o-mini
-   
-   # EPICS Configuration
-   EPICS_CA_AUTO_ADDR_LIST=NO
-   EPICS_CA_ADDR_LIST=127.0.0.1
-   EPICS_CA_SERVER_PORT=5064
-   EPICS_CA_REPEATER_PORT=5065
-   
-   # Server Configuration
-   HOST=0.0.0.0
-   PORT=8000
-   DEBUG=True
+   # Edit .env and add your OpenAI API key (optional for demo mode)
    ```
 
 ## 🚀 Quick Start
 
-### 🎯 **For New Users (Recommended)**
+### Option 1: Demo Mode (Recommended for First Time)
 
-**One-Command Setup:**
-
-**macOS/Linux:**
-```bash
-git clone https://github.com/yourusername/kstar-mcp-poc-v2.git
-cd kstar-mcp-poc-v2
-chmod +x setup.sh
-./setup.sh
-```
-
-**Windows:**
-```cmd
-git clone https://github.com/yourusername/kstar-mcp-poc-v2.git
-cd kstar-mcp-poc-v2
-setup.bat
-```
-
-**Then run:**
-```bash
-# Activate virtual environment
-source venv/bin/activate  # macOS/Linux
-# OR
-venv\Scripts\activate.bat  # Windows
-
-# Start the application
-python main.py
-```
-
-**Open browser:** `http://localhost:8000`
-
-### Option 1: Demo Mode (No API Key Required)
-
-1. **Start the Server**:
+1. **Start the Application**:
    ```bash
    python main.py
    ```
@@ -155,34 +107,30 @@ python main.py
    - Click "Execute Command"
    - Watch the real-time translation and temperature changes!
 
-### Option 2: Full LLM Mode (Requires OpenAI API Key)
+### Option 2: With OpenAI API (Full LLM Mode)
 
 1. **Set up API Key**:
    ```bash
-   cp config.env.example .env
-   # Edit .env and add your OpenAI API key
+   # Edit .env file and add:
+   OPENAI_API_KEY=your_openai_api_key_here
    ```
 
-2. **Start the Server**:
+2. **Start the Application**:
    ```bash
    python main.py
    ```
 
-### Option 2: With EPICS SoftIOC (Advanced)
+### Option 3: With EPICS SoftIOC (Advanced)
 
 1. **Start SoftIOC** (in separate terminal):
    ```bash
-   cd kstar_mcp_poc_v2
-   source ../epics/bin/activate
    export EPICS_CA_AUTO_ADDR_LIST=NO
    export EPICS_CA_ADDR_LIST=127.0.0.1
    softIoc -d databases/kstar_control.db
    ```
 
-2. **Start the Server** (in another terminal):
+2. **Start the Application** (in another terminal):
    ```bash
-   cd kstar_mcp_poc_v2
-   source ../epics/bin/activate
    python main.py
    ```
 
@@ -193,8 +141,8 @@ kstar_mcp_poc_v2/
 ├── README.md                 # This file
 ├── requirements.txt          # Python dependencies
 ├── config.env.example       # Environment configuration template
-├── .env                     # Your environment configuration
 ├── main.py                  # Main application entry point
+├── test_system.py           # System testing script
 ├── databases/
 │   └── kstar_control.db     # EPICS database for KSTAR simulation
 └── src/
@@ -232,20 +180,13 @@ kstar_mcp_poc_v2/
   - `"Increase heater power to 80%"`
   - `"Set coil current to 1500A"`
 
-### Demo Mode Features
-
-- **Simulation**: No actual EPICS hardware required
-- **Realistic Behavior**: Temperature changes gradually toward target
-- **Complete Translation**: Full natural language → EPICS command pipeline
-- **Real-time Updates**: WebSocket-based live monitoring
-
 ## 🔧 Technical Details
 
 ### Architecture
 
 - **Frontend**: HTML5 + JavaScript + WebSocket
 - **Backend**: FastAPI + WebSocket
-- **LLM**: OpenAI GPT-4o-mini
+- **LLM**: OpenAI GPT-4o-mini (optional)
 - **EPICS**: Process Variables (PVs) for control
 - **Simulation**: In-memory PV simulation
 
@@ -263,13 +204,28 @@ kstar_mcp_poc_v2/
 - `KSTAR:COIL:CURR`: Coil Current
 - `KSTAR:HEATER:POW`: Heater Power
 
+## 🧪 Testing
+
+Run the test suite to verify system functionality:
+
+```bash
+# Test all components
+python test_system.py --component all
+
+# Test individual components
+python test_system.py --component parser
+python test_system.py --component epics
+python test_system.py --component engine
+```
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
 1. **Port 8000 Already in Use**:
    ```bash
-   lsof -ti:8000 | xargs kill -9
+   lsof -ti:8000 | xargs kill -9  # macOS/Linux
+   netstat -ano | findstr :8000   # Windows
    ```
 
 2. **EPICS Connection Failed**:
@@ -280,13 +236,6 @@ kstar_mcp_poc_v2/
 3. **OpenAI API Error**:
    - Verify API key in `.env` file
    - Check API key has sufficient credits
-
-### Debug Mode
-
-Enable debug output by adding print statements in `src/ui/demo_ui.py`:
-```python
-print(f"DEBUG: Command received: {command}")
-```
 
 ## 🤝 Contributing
 
@@ -311,7 +260,7 @@ This project is for research and educational purposes.
 For questions or issues:
 1. Check the troubleshooting section
 2. Review the project structure
-3. Enable debug mode for detailed logging
+3. Run the test suite
 
 ---
 
